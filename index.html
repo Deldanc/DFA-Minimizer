@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DFA Minimization — Table-Filling Algorithm</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --marked: #ef4444;
+    --unmarked: #10b981;
+    --cell-size: 52px;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 40% at 10% 10%, rgba(0,212,255,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(124,58,237,0.07) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 32px 20px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  header h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -1px;
+  }
+
+  header p {
+    color: var(--text2);
+    font-size: 1rem;
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+  .card h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card h2::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 14px;
+  }
+
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .transition-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+  }
+
+  .transition-table th {
+    background: var(--bg3);
+    color: var(--accent);
+    padding: 8px 12px;
+    text-align: center;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+
+  .transition-table td {
+    border: 1px solid var(--border);
+    padding: 2px;
+  }
+
+  .transition-table td:first-child {
+    background: var(--bg3);
+    color: var(--accent2);
+    font-weight: 700;
+    text-align: center;
+    padding: 8px;
+    min-width: 60px;
+  }
+
+  .transition-table input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    text-align: center;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    padding: 8px;
+    outline: none;
+    margin-bottom: 0;
+  }
+
+  .transition-table input:focus { background: rgba(0,212,255,0.05); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    padding: 12px 28px;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--text2);
+    padding: 12px 20px;
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── TABLE FILLING ─── */
+  #results { display: none; }
+
+  .fill-table-wrap {
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+
+  .fill-table {
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
+
+  .fill-table th, .fill-table td {
+    border: 1px solid var(--border);
+    width: var(--cell-size);
+    height: var(--cell-size);
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .fill-table th {
+    background: var(--bg3);
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .fill-table .row-header {
+    background: var(--bg3);
+    color: var(--accent2);
+    font-weight: 700;
+  }
+
+  .fill-table .cell-diag {
+    background: var(--bg3);
+    color: var(--text3);
+  }
+
+  .fill-table .cell-marked {
+    background: rgba(239,68,68,0.18);
+    color: var(--marked);
+    font-weight: 700;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+  }
+
+  .fill-table .cell-marked:hover {
+    background: rgba(239,68,68,0.38);
+    z-index: 2;
+  }
+
+  .fill-table .cell-unmarked {
+    background: rgba(16,185,129,0.1);
+    color: var(--unmarked);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .fill-table .cell-unmarked:hover {
+    background: rgba(16,185,129,0.25);
+  }
+
+  .fill-table .cell-empty {
+    color: var(--text3);
+  }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--accent);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 0 60px rgba(0,212,255,0.2);
+    animation: modalIn 0.25s ease;
+    position: relative;
+  }
+
+  @keyframes modalIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+  .modal h3 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+
+  .modal h3.is-marked { color: var(--marked); }
+  .modal h3.is-unmarked { color: var(--unmarked); }
+
+  .modal .pair-badge {
+    display: inline-block;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .reason-block {
+    background: var(--bg3);
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 0.88rem;
+    color: var(--text2);
+    line-height: 1.7;
+    border-left: 3px solid var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .reason-block .reason-step {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .reason-block .reason-step:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .reason-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  /* ─── DFA DIAGRAM ─── */
+  .diagram-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 24px;
+  }
+
+  .diagram-wrap h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .diagram-wrap h2::before {
+    content: '';
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--accent);
+  }
+
+  .diagrams-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+
+  @media (max-width: 900px) { .diagrams-grid { grid-template-columns: 1fr; } }
+
+  .diagram-panel h3 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text2);
+    font-weight: 700;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  svg.dfa-svg {
+    display: block;
+    width: 100%;
+    height: 460px;
+    background: var(--bg3);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  /* ─── EQUIVALENCE CLASSES ─── */
+  .equiv-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .equiv-class {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text);
+    transition: border-color 0.2s;
+  }
+
+  .equiv-class:hover { border-color: var(--accent2); }
+
+  .equiv-class span.class-id {
+    color: var(--accent2);
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  /* ─── STEPS LOG ─── */
+  .steps-log {
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--bg3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.8;
+  }
+
+  .steps-log::-webkit-scrollbar { width: 4px; }
+  .steps-log::-webkit-scrollbar-track { background: transparent; }
+  .steps-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-entry { color: var(--text2); margin-bottom: 4px; }
+  .log-entry .step-num { color: var(--accent); font-weight: 700; }
+  .log-entry .mark-action { color: var(--marked); }
+  .log-entry .merge-action { color: var(--unmarked); }
+  .log-entry .pass-label { color: var(--warn); }
+
+  /* ─── TOOLTIP hint ─── */
+  .hint {
+    font-size: 0.75rem;
+    color: var(--text3);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .hint::before { content: 'ℹ'; color: var(--accent); }
+
+  .tag-final { color: var(--warn); font-size: 0.7rem; }
+  .tag-start { color: var(--accent3); font-size: 0.7rem; }
+
+  .stat-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .stat {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text2);
+  }
+
+  .stat span { color: var(--accent); font-weight: 700; font-size: 1rem; }
+
+  .visualizer-card {
+    margin-bottom: 24px;
+  }
+
+  .viz-controls {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .viz-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .viz-btn {
+    padding: 10px 14px;
+    font-size: 0.82rem;
+    min-width: 68px;
+  }
+
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  .viz-progress-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .viz-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.22s ease;
+  }
+
+  .viz-progress-label {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .viz-panels {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .viz-panel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .viz-subtitle {
+    margin-bottom: 10px;
+    font-size: 0.78rem;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .step-explainer {
+    background: rgba(10,14,23,0.72);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .step-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .step-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--text2);
+    font-size: 0.72rem;
+    background: var(--bg2);
+  }
+
+  .step-chip strong {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .step-body {
+    font-size: 0.8rem;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .step-body strong {
+    color: var(--text);
+  }
+
+  .step-transition-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+
+  .step-transition-table th,
+  .step-transition-table td {
+    border: 1px solid var(--border);
+    padding: 7px 8px;
+    text-align: center;
+  }
+
+  .step-transition-table th {
+    color: var(--accent);
+    background: rgba(10,14,23,0.55);
+    font-size: 0.74rem;
+    letter-spacing: 0.7px;
+  }
+
+  .step-transition-table .trigger-row {
+    background: rgba(239,68,68,0.16);
+  }
+
+  .step-transition-table .safe-row {
+    background: rgba(16,185,129,0.09);
+  }
+
+  .step-transition-table .merge-row {
+    background: rgba(0,212,255,0.13);
+  }
+
+  .step-transition-table .state-col {
+    text-align: left;
+    font-weight: 700;
+  }
+
+  .step-transition-wrap {
+    overflow-x: auto;
+  }
+
+  .cell-focus {
+    box-shadow: inset 0 0 0 2px #f59e0b;
+  }
+
+  @media (max-width: 980px) {
+    .viz-controls {
+      grid-template-columns: 1fr;
+    }
+
+    .viz-panels {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  #error-box {
+    display: none;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--danger);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>DFA Minimization</h1>
+    <p>Interactive table-filling walkthrough with pass-wise snapshots</p>
+  </header>
+
+  <!-- INPUT SECTION -->
+  <div class="grid">
+    <div class="card">
+      <h2>DFA Definition</h2>
+
+      <label>States (comma-separated)</label>
+      <input type="text" id="inp-states" value="A,B,C,D,E,F" placeholder="A,B,C,D,E,F">
+
+      <label>Alphabet (comma-separated)</label>
+      <input type="text" id="inp-alpha" value="0,1" placeholder="0,1">
+
+      <label>Start State</label>
+      <input type="text" id="inp-start" value="A" placeholder="A">
+
+      <label>Final States (comma-separated)</label>
+      <input type="text" id="inp-final" value="C,D,E" placeholder="C,D,E">
+
+      <div id="error-box"></div>
+
+      <div class="btn-row">
+        <button class="btn-primary" onclick="runMinimization()">▶ Run Algorithm</button>
+        <button class="btn-secondary" onclick="loadSample()">Load Sample</button>
+        <button class="btn-secondary" onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Transition Table</h2>
+      <div style="overflow-x:auto">
+        <table class="transition-table" id="trans-table">
+          <thead><tr id="trans-head"></tr></thead>
+          <tbody id="trans-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <div class="card visualizer-card">
+      <h2>Step Visualizer</h2>
+      <div class="viz-controls">
+        <div class="viz-btns">
+          <button id="btn-first" class="btn-secondary viz-btn" onclick="goToFirstStep()">First</button>
+          <button id="btn-prev" class="btn-secondary viz-btn" onclick="goToPrevStep()">Prev</button>
+          <button id="btn-next" class="btn-secondary viz-btn" onclick="goToNextStep()">Next</button>
+          <button id="btn-last" class="btn-secondary viz-btn" onclick="goToLastStep()">Last</button>
+        </div>
+        <div>
+          <div class="viz-progress-track">
+            <div class="viz-progress-fill" id="viz-progress-fill"></div>
+          </div>
+          <div class="viz-progress-label" id="viz-progress-label">Step 0 / 0</div>
+        </div>
+      </div>
+
+      <div class="viz-panels">
+        <div class="viz-panel">
+          <div class="viz-subtitle">Explanation</div>
+          <div class="step-explainer" id="step-explainer"></div>
+          <div class="viz-subtitle">Transition Table For This Step</div>
+          <div class="step-transition-wrap">
+            <table class="step-transition-table" id="step-transition-table"></table>
+          </div>
+        </div>
+
+        <div class="viz-panel">
+          <div class="viz-subtitle">Distinguishability Table Snapshot</div>
+          <div class="fill-table-wrap">
+            <table class="fill-table" id="step-fill-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <p class="hint">Use First/Prev/Next/Last buttons or keyboard keys: Left/Right, Home, End.</p>
+    </div>
+
+    <!-- TABLE FILLING -->
+    <div class="grid">
+      <div class="card">
+        <h2>Distinguishability Table</h2>
+        <p class="hint">Click any ✗ or ✓ cell to see WHY that pair was marked/unmarked</p>
+        <div class="fill-table-wrap">
+          <table class="fill-table" id="fill-table"></table>
+        </div>
+        <div class="stat-row" id="stat-row"></div>
+      </div>
+
+      <div class="card">
+        <h2>Algorithm Log</h2>
+        <div class="steps-log" id="steps-log"></div>
+        <div style="margin-top:20px">
+          <h2 style="margin-bottom:12px">Equivalence Classes</h2>
+          <div class="equiv-wrap" id="equiv-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DFA DIAGRAMS -->
+    <div class="diagram-wrap">
+      <h2>DFA Diagrams</h2>
+      <div class="diagrams-grid">
+        <div class="diagram-panel">
+          <h3>Original DFA</h3>
+          <svg class="dfa-svg" id="svg-orig"></svg>
+        </div>
+        <div class="diagram-panel">
+          <h3>Minimized DFA</h3>
+          <svg class="dfa-svg" id="svg-min"></svg>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    <h3 id="modal-title"></h3>
+    <div class="pair-badge" id="modal-pair"></div>
+    <div class="reason-block" id="modal-reason"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let gStates = [], gAlpha = [], gStart = '', gFinal = new Set();
+let gDelta = {}; // gDelta[state][sym] = nextState
+let gTable = {}; // key = "X,Y" (X < Y) → { marked: bool, reason: [], pass: 0 }
+let gLog = [];
+let gStepFrames = [];
+let gCurrentStep = 0;
+
+// ─────────────────────────────────────────────
+//  SAMPLE DATA
+// ─────────────────────────────────────────────
+const SAMPLE = {
+  states: 'A,B,C,D,E,F',
+  alpha: '0,1',
+  start: 'A',
+  final: 'C,D,E',
+  delta: {
+    A: { '0': 'B', '1': 'C' },
+    B: { '0': 'A', '1': 'D' },
+    C: { '0': 'E', '1': 'F' },
+    D: { '0': 'E', '1': 'F' },
+    E: { '0': 'E', '1': 'F' },
+    F: { '0': 'F', '1': 'F' }
+  }
+};
+
+function loadSample() {
+  document.getElementById('inp-states').value = SAMPLE.states;
+  document.getElementById('inp-alpha').value = SAMPLE.alpha;
+  document.getElementById('inp-start').value = SAMPLE.start;
+  document.getElementById('inp-final').value = SAMPLE.final;
+  gStates = SAMPLE.states.split(',').map(s => s.trim());
+  gAlpha = SAMPLE.alpha.split(',').map(s => s.trim());
+  gFinal = new Set(SAMPLE.final.split(',').map(s => s.trim()));
+  rebuildTransTable();
+  const tbody = document.getElementById('trans-body');
+  gStates.forEach(st => {
+    const row = tbody.querySelector(`tr[data-state="${st}"]`);
+    if (!row) return;
+    gAlpha.forEach(sym => {
+      const inp = row.querySelector(`input[data-sym="${sym}"]`);
+      if (inp) inp.value = SAMPLE.delta[st]?.[sym] || '';
+    });
+  });
+}
+
+function clearAll() {
+  document.getElementById('inp-states').value = '';
+  document.getElementById('inp-alpha').value = '';
+  document.getElementById('inp-start').value = '';
+  document.getElementById('inp-final').value = '';
+  document.getElementById('trans-head').innerHTML = '';
+  document.getElementById('trans-body').innerHTML = '';
+  document.getElementById('results').style.display = 'none';
+  gStepFrames = [];
+  gCurrentStep = 0;
+  hideError();
+}
+
+// ─────────────────────────────────────────────
+//  TRANSITION TABLE BUILD
+// ─────────────────────────────────────────────
+document.getElementById('inp-states').addEventListener('input', rebuildTransTable);
+document.getElementById('inp-alpha').addEventListener('input', rebuildTransTable);
+
+function rebuildTransTable() {
+  gStates = document.getElementById('inp-states').value.split(',').map(s => s.trim()).filter(Boolean);
+  gAlpha = document.getElementById('inp-alpha').value.split(',').map(s => s.trim()).filter(Boolean);
+  const thead = document.getElementById('trans-head');
+  const tbody = document.getElementById('trans-body');
+
+  const oldVals = {};
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const st = tr.dataset.state;
+    oldVals[st] = {};
+    tr.querySelectorAll('input').forEach(inp => {
+      oldVals[st][inp.dataset.sym] = inp.value;
+    });
+  });
+
+  thead.innerHTML = '<th>State</th>' + gAlpha.map(s => `<th>δ(${s})</th>`).join('');
+  tbody.innerHTML = '';
+  gStates.forEach(st => {
+    const tr = document.createElement('tr');
+    tr.dataset.state = st;
+    tr.innerHTML = `<td>${st}</td>` + gAlpha.map(sym =>
+      `<td><input type="text" data-sym="${sym}" value="${(oldVals[st]?.[sym]) || ''}" placeholder="—"></td>`
+    ).join('');
+    tbody.appendChild(tr);
+  });
+}
+
+// On load, build default
+window.addEventListener('DOMContentLoaded', () => {
+  rebuildTransTable();
+  loadSample();
+});
+
+// ─────────────────────────────────────────────
+//  READ TRANSITIONS
+// ─────────────────────────────────────────────
+function readDelta() {
+  gDelta = {};
+  gStates.forEach(st => { gDelta[st] = {}; });
+  document.getElementById('trans-body').querySelectorAll('tr').forEach(tr => {
+    const st = tr.dataset.state;
+    tr.querySelectorAll('input').forEach(inp => {
+      const v = inp.value.trim();
+      if (v) gDelta[st][inp.dataset.sym] = v;
+    });
+  });
+}
+
+// ─────────────────────────────────────────────
+//  TABLE FILLING ALGORITHM
+// ─────────────────────────────────────────────
+function pairKey(a, b) {
+  return [a, b].sort().join(',');
+}
+
+function snapshotTableState() {
+  const snap = {};
+  for (const [k, v] of Object.entries(gTable)) {
+    snap[k] = { marked: !!v.marked, pass: v.pass };
+  }
+  return snap;
+}
+
+function buildTransitionRowsForPair(a, b) {
+  return gAlpha.map(sym => {
+    const da = gDelta[a]?.[sym] || '—';
+    const db = gDelta[b]?.[sym] || '—';
+    let targetPair = '—';
+    let targetStatus = 'Missing transition';
+
+    if (da !== '—' && db !== '—') {
+      if (da === db) {
+        targetStatus = 'Same destination';
+      } else {
+        targetPair = pairKey(da, db);
+        if (gTable[targetPair]) {
+          targetStatus = gTable[targetPair].marked ? 'Already marked' : 'Not marked yet';
+        } else {
+          targetStatus = 'Pair outside table';
+        }
+      }
+    }
+
+    return { sym, da, db, targetPair, targetStatus };
+  });
+}
+
+function pushStepFrame(step) {
+  gStepFrames.push({
+    ...step,
+    tableState: snapshotTableState()
+  });
+}
+
+function ufFind(parent, x) {
+  if (parent[x] === x) return x;
+  parent[x] = ufFind(parent, parent[x]);
+  return parent[x];
+}
+
+function ufUnion(parent, a, b) {
+  parent[ufFind(parent, a)] = ufFind(parent, b);
+}
+
+function getOrderedGroupsFromParent(parent) {
+  const groupsByRoot = {};
+  gStates.forEach(st => {
+    const root = ufFind(parent, st);
+    if (!groupsByRoot[root]) groupsByRoot[root] = [];
+    groupsByRoot[root].push(st);
+  });
+
+  const groups = Object.values(groupsByRoot).map(group =>
+    group.sort((a, b) => gStates.indexOf(a) - gStates.indexOf(b))
+  );
+  groups.sort((a, b) => gStates.indexOf(a[0]) - gStates.indexOf(b[0]));
+  return groups;
+}
+
+function buildMinimizedSnapshotFromGroups(groups) {
+  const stateMap = {};
+  const minStateNames = groups.map(group => `{${group.join(',')}}`);
+  groups.forEach((group, idx) => {
+    const name = minStateNames[idx];
+    group.forEach(st => { stateMap[st] = name; });
+  });
+
+  const rows = groups.map((group, idx) => {
+    const rep = group[0];
+    const stateName = minStateNames[idx];
+    const transitions = {};
+
+    gAlpha.forEach(sym => {
+      const nxt = gDelta[rep]?.[sym];
+      transitions[sym] = nxt ? (stateMap[nxt] || '—') : '—';
+    });
+
+    const isStart = group.includes(gStart);
+    const isFinal = group.some(st => gFinal.has(st));
+    let type = '—';
+    if (isStart && isFinal) type = 'Start + Final';
+    else if (isStart) type = 'Start';
+    else if (isFinal) type = 'Final';
+
+    return {
+      state: stateName,
+      transitions,
+      type,
+      isStart,
+      isFinal,
+      members: group
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.isStart && !b.isStart) return -1;
+    if (!a.isStart && b.isStart) return 1;
+    return gStates.indexOf(a.members[0]) - gStates.indexOf(b.members[0]);
+  });
+
+  return {
+    rows,
+    startState: stateMap[gStart] || null
+  };
+}
+
+function buildOriginalSnapshot() {
+  const rows = gStates.map(st => {
+    const transitions = {};
+
+    gAlpha.forEach(sym => {
+      transitions[sym] = gDelta[st]?.[sym] || '—';
+    });
+
+    const isStart = st === gStart;
+    const isFinal = gFinal.has(st);
+    let type = '—';
+    if (isStart && isFinal) type = 'Start + Final';
+    else if (isStart) type = 'Start';
+    else if (isFinal) type = 'Final';
+
+    return {
+      state: `{${st}}`,
+      transitions,
+      type,
+      isStart,
+      isFinal,
+      members: [st]
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (a.isStart && !b.isStart) return -1;
+    if (!a.isStart && b.isStart) return 1;
+    return gStates.indexOf(a.members[0]) - gStates.indexOf(b.members[0]);
+  });
+
+  return {
+    rows,
+    startState: gStart ? `{${gStart}}` : null
+  };
+}
+
+function buildMergeTimeline() {
+  const parent = {};
+  gStates.forEach(st => { parent[st] = st; });
+
+  const frames = [];
+  let mergeIdx = 1;
+  const unmarkedPairs = Object.entries(gTable)
+    .filter(([, info]) => !info.marked)
+    .map(([k]) => k);
+
+  for (const k of unmarkedPairs) {
+    const [a, b] = k.split(',');
+    if (ufFind(parent, a) === ufFind(parent, b)) continue;
+
+    ufUnion(parent, a, b);
+    const groups = getOrderedGroupsFromParent(parent);
+    const mergedGroup = groups.find(group => group.includes(a) && group.includes(b)) || [a, b];
+
+    frames.push({
+      pass: `Merge ${mergeIdx}`,
+      pair: k,
+      symbol: null,
+      title: `Merging equivalent states (${mergeIdx})`,
+      action: 'States merged',
+      description: `Pair {${a}, ${b}} is unmarked, so these states are equivalent and are merged into ${`{${mergedGroup.join(',')}}`} in the minimized DFA.`,
+      transitionMode: 'minimized',
+      minimizedSnapshot: buildMinimizedSnapshotFromGroups(groups),
+      mergedPair: [a, b],
+      mergedStateName: `{${mergedGroup.join(',')}}`
+    });
+
+    mergeIdx++;
+  }
+
+  const finalGroups = getOrderedGroupsFromParent(parent);
+  return {
+    frames,
+    finalSnapshot: buildMinimizedSnapshotFromGroups(finalGroups)
+  };
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+
+function runMinimization() {
+  hideError();
+  gStates = document.getElementById('inp-states').value.split(',').map(s => s.trim()).filter(Boolean);
+  gAlpha = document.getElementById('inp-alpha').value.split(',').map(s => s.trim()).filter(Boolean);
+  gStart = document.getElementById('inp-start').value.trim();
+  gFinal = new Set(document.getElementById('inp-final').value.split(',').map(s => s.trim()).filter(Boolean));
+
+  if (gStates.length < 2) { showError('Need at least 2 states.'); return; }
+  if (gAlpha.length < 1) { showError('Need at least 1 symbol.'); return; }
+  if (!gStates.includes(gStart)) { showError(`Start state "${gStart}" not in states list.`); return; }
+  for (const f of gFinal) {
+    if (!gStates.includes(f)) { showError(`Final state "${f}" not in states list.`); return; }
+  }
+
+  readDelta();
+  gTable = {};
+  gLog = [];
+  gStepFrames = [];
+  gCurrentStep = 0;
+
+  // Generate all pairs (i < j by index)
+  for (let i = 0; i < gStates.length; i++) {
+    for (let j = i + 1; j < gStates.length; j++) {
+      const k = pairKey(gStates[i], gStates[j]);
+      gTable[k] = { marked: false, reason: [], pass: -1 };
+    }
+  }
+
+  pushStepFrame({
+    pass: 0,
+    pair: null,
+    symbol: null,
+    title: 'Initialization',
+    action: 'Table initialized',
+    description: 'All state-pairs start unmarked. The algorithm now checks each pair pass by pass.',
+    transitionRows: []
+  });
+
+  // Pass 0: mark (final, non-final) pairs
+  gLog.push({ type: 'pass', pass: 0, msg: 'Pass 0 — Mark (final, non-final) pairs' });
+  for (const k of Object.keys(gTable)) {
+    const [a, b] = k.split(',');
+    const aF = gFinal.has(a), bF = gFinal.has(b);
+    const transitionRows = buildTransitionRowsForPair(a, b);
+    if (aF !== bF) {
+      const reason = {
+        label: 'Base Case',
+        text: `One of {${a}, ${b}} is a final state and the other is not.\n→ ${a} is ${aF ? '' : 'NOT '}final, ${b} is ${bF ? '' : 'NOT '}final.`
+      };
+      gTable[k].marked = true;
+      gTable[k].pass = 0;
+      gTable[k].reason = [reason];
+      gLog.push({ type: 'mark', pair: k, pass: 0, reason });
+      pushStepFrame({
+        pass: 0,
+        pair: k,
+        symbol: null,
+        title: 'Base marking',
+        action: 'Marked as distinguishable',
+        description: `Examining pair {${a}, ${b}}. Exactly one of these states is final, so this pair is immediately marked in pass 0.`,
+        transitionMode: 'pair',
+        transitionRows
+      });
+    } else {
+      pushStepFrame({
+        pass: 0,
+        pair: k,
+        symbol: null,
+        title: 'Base check',
+        action: 'Left unmarked',
+        description: `Examining pair {${a}, ${b}}. Both states are ${aF ? 'final' : 'non-final'}, so pass 0 does not mark this pair.`,
+        transitionMode: 'pair',
+        transitionRows
+      });
+    }
+  }
+
+  // Iterative passes
+  let changed = true, passNum = 1;
+  while (changed) {
+    changed = false;
+    gLog.push({ type: 'pass', pass: passNum, msg: `Pass ${passNum} — Propagate marks` });
+    for (const k of Object.keys(gTable)) {
+      if (gTable[k].marked) continue;
+      const [a, b] = k.split(',');
+      const transitionRows = buildTransitionRowsForPair(a, b);
+      let triggeredSymbol = null;
+      for (const sym of gAlpha) {
+        const da = gDelta[a]?.[sym], db = gDelta[b]?.[sym];
+        if (!da || !db) continue;
+        if (da === db) continue; // same state => skip
+        const pk = pairKey(da, db);
+        if (gTable[pk] && gTable[pk].marked) {
+          triggeredSymbol = sym;
+          const reason = {
+            label: `Pass ${passNum} — Symbol '${sym}'`,
+            text: `δ(${a}, ${sym}) = ${da}, δ(${b}, ${sym}) = ${db}\nPair {${da}, ${db}} is already marked.\n→ So {${a}, ${b}} must also be distinguishable.`
+          };
+          gTable[k].marked = true;
+          gTable[k].pass = passNum;
+          gTable[k].reason = [...(gTable[k].reason || []), reason];
+          gLog.push({ type: 'mark', pair: k, pass: passNum, reason });
+          pushStepFrame({
+            pass: passNum,
+            pair: k,
+            symbol: sym,
+            title: `Propagation in pass ${passNum}`,
+            action: 'Marked as distinguishable',
+            description: `Examining pair {${a}, ${b}}. On symbol '${sym}', it transitions to pair {${da}, ${db}}, which is already marked. Therefore {${a}, ${b}} is marked in this pass.`,
+            transitionMode: 'pair',
+            transitionRows
+          });
+          changed = true;
+          break;
+        }
+      }
+
+      if (!gTable[k].marked && triggeredSymbol === null) {
+        pushStepFrame({
+          pass: passNum,
+          pair: k,
+          symbol: null,
+          title: `Propagation in pass ${passNum}`,
+          action: 'Stayed unmarked',
+          description: `Examining pair {${a}, ${b}}. None of its symbol transitions reached an already marked pair, so it remains unmarked in this pass.`,
+          transitionMode: 'pair',
+          transitionRows
+        });
+      }
+    }
+    passNum++;
+    if (passNum > 20) break; // safety
+  }
+
+  // Label unmarked
+  for (const k of Object.keys(gTable)) {
+    if (!gTable[k].marked) {
+      const [a, b] = k.split(',');
+      gTable[k].reason = [{
+        label: 'Indistinguishable',
+        text: `After all passes, no input sequence distinguishes ${a} from ${b}.\nThey behave identically for all inputs → can be merged.`
+      }];
+      gLog.push({ type: 'merge', pair: k });
+    }
+  }
+
+  const mergeTimeline = buildMergeTimeline();
+  mergeTimeline.frames.forEach(frame => pushStepFrame(frame));
+
+  pushStepFrame({
+    pass: 'Final',
+    pair: null,
+    symbol: null,
+    title: 'Final minimized transition table',
+    action: 'Minimization complete',
+    description: 'All equivalent states are merged. This is the final transition table of the minimized DFA.',
+    transitionMode: 'minimized',
+    minimizedSnapshot: mergeTimeline.finalSnapshot
+  });
+
+  renderResults();
+}
+
+// ─────────────────────────────────────────────
+//  RENDER RESULTS
+// ─────────────────────────────────────────────
+function renderResults() {
+  document.getElementById('results').style.display = 'block';
+  renderStepVisualizer();
+  renderFillTable();
+  renderLog();
+  renderEquivClasses();
+  renderDiagrams();
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildFillTableHtml(tableState, focusPair) {
+  const n = gStates.length;
+  let html = '<thead><tr><th></th>';
+  for (let j = 0; j < n - 1; j++) html += `<th>${gStates[j]}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 1; i < n; i++) {
+    html += `<tr><td class="row-header">${gStates[i]}</td>`;
+    for (let j = 0; j < n - 1; j++) {
+      if (j >= i) {
+        html += '<td class="cell-diag">—</td>';
+      } else {
+        const k = pairKey(gStates[i], gStates[j]);
+        const info = tableState[k];
+        const focusClass = focusPair === k ? ' cell-focus' : '';
+        if (info?.marked) {
+          html += `<td class="cell-marked${focusClass}">✗</td>`;
+        } else {
+          html += `<td class="cell-unmarked${focusClass}">✓</td>`;
+        }
+      }
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody>';
+  return html;
+}
+
+function renderStepVisualizer() {
+  if (!gStepFrames.length) return;
+  gCurrentStep = 0;
+  renderCurrentStep();
+}
+
+function renderCurrentStep() {
+  if (!gStepFrames.length) return;
+  const step = gStepFrames[gCurrentStep];
+  const total = gStepFrames.length;
+  const humanStep = gCurrentStep + 1;
+
+  document.getElementById('step-fill-table').innerHTML = buildFillTableHtml(step.tableState, step.pair);
+
+  const explainer = document.getElementById('step-explainer');
+  explainer.innerHTML = `
+    <div class="step-meta">
+      <span class="step-chip">Step <strong>${humanStep}</strong> / ${total}</span>
+      <span class="step-chip">Pass <strong>${step.pass}</strong></span>
+      <span class="step-chip">Action: <strong>${step.action}</strong></span>
+      <span class="step-chip">Pair: <strong>${step.pair ? `{${step.pair}}` : '—'}</strong></span>
+      <span class="step-chip">Symbol: <strong>${step.symbol || '—'}</strong></span>
+    </div>
+    <div class="step-body">
+      <strong>${step.title}:</strong> ${step.description}
+    </div>
+  `;
+
+  renderStepTransitionTable(step);
+
+  const progress = total > 1 ? (gCurrentStep / (total - 1)) * 100 : 100;
+  document.getElementById('viz-progress-fill').style.width = `${progress}%`;
+  document.getElementById('viz-progress-label').textContent = `Step ${humanStep} / ${total} (${Math.round(progress)}%)`;
+
+  document.getElementById('btn-first').disabled = gCurrentStep === 0;
+  document.getElementById('btn-prev').disabled = gCurrentStep === 0;
+  document.getElementById('btn-next').disabled = gCurrentStep === total - 1;
+  document.getElementById('btn-last').disabled = gCurrentStep === total - 1;
+}
+
+function renderStepTransitionTable(step) {
+  const table = document.getElementById('step-transition-table');
+
+  const snapshot = (step.transitionMode === 'minimized' && step.minimizedSnapshot)
+    ? step.minimizedSnapshot
+    : buildOriginalSnapshot();
+
+  if (!snapshot?.rows?.length) {
+    table.innerHTML = '<thead><tr><th>Info</th></tr></thead><tbody><tr><td>No transition data available for this step.</td></tr></tbody>';
+    return;
+  }
+
+  let html = '<thead><tr><th>State</th>';
+  html += gAlpha.map(sym => `<th>δ(${sym})</th>`).join('');
+  html += '<th>Type</th><th>Merged In This Step</th></tr></thead><tbody>';
+
+  snapshot.rows.forEach(row => {
+    const isMergeRow = !!step.mergedStateName && row.state === step.mergedStateName;
+    const rowCls = isMergeRow ? 'merge-row' : '';
+    const mergeNote = isMergeRow && step.mergedPair
+      ? `{${step.mergedPair.join(',')}}`
+      : '—';
+    const stateLabel = `${row.isStart ? '→ ' : ''}${row.state}${row.isFinal ? ' *' : ''}`;
+
+    html += `<tr class="${rowCls}">`;
+    html += `<td class="state-col">${stateLabel}</td>`;
+    gAlpha.forEach(sym => {
+      html += `<td>${row.transitions[sym] || '—'}</td>`;
+    });
+    html += `<td>${row.type}</td>`;
+    html += `<td>${mergeNote}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function goToStep(index) {
+  if (!gStepFrames.length) return;
+  gCurrentStep = Math.max(0, Math.min(index, gStepFrames.length - 1));
+  renderCurrentStep();
+}
+
+function goToFirstStep() { goToStep(0); }
+function goToPrevStep() { goToStep(gCurrentStep - 1); }
+function goToNextStep() { goToStep(gCurrentStep + 1); }
+function goToLastStep() { goToStep(gStepFrames.length - 1); }
+
+function renderFillTable() {
+  const table = document.getElementById('fill-table');
+  table.innerHTML = buildFillTableHtml(snapshotTableState(), null);
+
+  // Reattach click handlers for details modal in final static table.
+  const n = gStates.length;
+  for (let i = 1; i < n; i++) {
+    for (let j = 0; j < n - 1; j++) {
+      if (j >= i) continue;
+      const k = pairKey(gStates[i], gStates[j]);
+      const tr = table.querySelectorAll('tbody tr')[i - 1];
+      const td = tr?.children[j + 1];
+      if (!td) continue;
+      td.style.cursor = 'pointer';
+      td.title = 'Click for details';
+      td.onclick = () => showPairInfo(k);
+    }
+  }
+
+  // Stats
+  const total = Object.keys(gTable).length;
+  const marked = Object.values(gTable).filter(v => v.marked).length;
+  document.getElementById('stat-row').innerHTML = `
+    <div class="stat">Total pairs: <span>${total}</span></div>
+    <div class="stat">Marked ✗: <span style="color:var(--marked)">${marked}</span></div>
+    <div class="stat">Unmarked ✓: <span style="color:var(--unmarked)">${total - marked}</span></div>
+  `;
+}
+
+function renderLog() {
+  const el = document.getElementById('steps-log');
+  let html = '';
+  let stepN = 0;
+  for (const entry of gLog) {
+    if (entry.type === 'pass') {
+      html += `<div class="log-entry"><span class="pass-label">── ${entry.msg} ──</span></div>`;
+    } else if (entry.type === 'mark') {
+      stepN++;
+      html += `<div class="log-entry"><span class="step-num">[${stepN}]</span> <span class="mark-action">MARK {${entry.pair}}</span> — ${entry.reason.label}</div>`;
+    } else if (entry.type === 'merge') {
+      html += `<div class="log-entry"><span class="merge-action">EQUIV {${entry.pair}}</span> — indistinguishable</div>`;
+    }
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderEquivClasses() {
+  // Union-Find to build equivalence classes
+  const parent = {};
+  gStates.forEach(s => parent[s] = s);
+
+  function find(x) { return parent[x] === x ? x : (parent[x] = find(parent[x])); }
+  function union(x, y) { parent[find(x)] = find(y); }
+
+  for (const [k, v] of Object.entries(gTable)) {
+    if (!v.marked) {
+      const [a, b] = k.split(',');
+      union(a, b);
+    }
+  }
+
+  const classes = {};
+  gStates.forEach(s => {
+    const root = find(s);
+    if (!classes[root]) classes[root] = [];
+    classes[root].push(s);
+  });
+
+  const wrap = document.getElementById('equiv-wrap');
+  let html = '', cIdx = 0;
+  const colorPalette = ['#00d4ff', '#7c3aed', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6'];
+  for (const [, members] of Object.entries(classes)) {
+    const col = colorPalette[cIdx % colorPalette.length];
+    html += `<div class="equiv-class" style="border-color:${col}20">
+      <span class="class-id" style="color:${col}">Q${cIdx}</span>{${members.join(', ')}}
+    </div>`;
+    cIdx++;
+  }
+  wrap.innerHTML = html;
+
+  return classes;
+}
+
+// ─────────────────────────────────────────────
+//  DFA DIAGRAM RENDERING (SVG)
+// ─────────────────────────────────────────────
+function renderDiagrams() {
+  // Build minimized DFA
+  const { classes, stateMap, minStates, minDelta, minStart, minFinal } = buildMinDFA();
+
+  drawDFA(document.getElementById('svg-orig'), gStates, gAlpha, gDelta, gStart, gFinal, null);
+  drawDFA(document.getElementById('svg-min'), minStates, gAlpha, minDelta, minStart, minFinal, stateMap);
+}
+
+function buildMinDFA() {
+  const parent = {};
+  gStates.forEach(s => parent[s] = s);
+  function find(x) { return parent[x] === x ? x : (parent[x] = find(parent[x])); }
+  function union(x, y) { parent[find(x)] = find(y); }
+
+  for (const [k, v] of Object.entries(gTable)) {
+    if (!v.marked) {
+      const [a, b] = k.split(',');
+      union(a, b);
+    }
+  }
+
+  const classMap = {};
+  gStates.forEach(s => {
+    const r = find(s);
+    if (!classMap[r]) classMap[r] = [];
+    classMap[r].push(s);
+  });
+
+  // Name minimized states: use first member alphabetically
+  const stateMap = {}; // original → minimized name
+  const minStateNames = {};
+  let idx = 0;
+  for (const [root, members] of Object.entries(classMap)) {
+    const name = members.sort().join('/');
+    members.forEach(m => stateMap[m] = name);
+    minStateNames[root] = name;
+    idx++;
+  }
+
+  const minStates = [...new Set(Object.values(stateMap))];
+  const minStart = stateMap[gStart];
+  const minFinal = new Set([...gFinal].map(f => stateMap[f]));
+  const minDelta = {};
+  minStates.forEach(ms => { minDelta[ms] = {}; });
+
+  for (const st of gStates) {
+    const ms = stateMap[st];
+    for (const sym of gAlpha) {
+      const nxt = gDelta[st]?.[sym];
+      if (nxt && stateMap[nxt]) {
+        minDelta[ms][sym] = stateMap[nxt];
+      }
+    }
+  }
+
+  return { classes: classMap, stateMap, minStates, minDelta, minStart, minFinal };
+}
+
+function drawDFA(svgEl, states, alpha, delta, startState, finalStates, stateMap) {
+  svgEl.innerHTML = '';
+  const W = svgEl.clientWidth || 560;
+  const H = 460;
+  const cx = W / 2, cy = H / 2;
+  const n = states.length;
+
+  // Layout: circle arrangement
+  const r = Math.min(cx - 80, cy - 80, 170);
+  const nodeR = 26;
+  const pos = {};
+
+  if (n === 1) {
+    pos[states[0]] = { x: cx, y: cy };
+  } else {
+    states.forEach((s, i) => {
+      const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+      pos[s] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    });
+  }
+
+  // SVG defs
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <marker id="arrow-${svgEl.id}" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrow-start-${svgEl.id}" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#10b981"/>
+    </marker>
+  `;
+  svgEl.appendChild(defs);
+
+  // Group edges by (from, to) to handle multiple symbols
+  const edgeMap = {};
+  states.forEach(st => {
+    alpha.forEach(sym => {
+      const nxt = delta[st]?.[sym];
+      if (!nxt) return;
+      const key = `${st}→${nxt}`;
+      if (!edgeMap[key]) edgeMap[key] = { from: st, to: nxt, syms: [] };
+      edgeMap[key].syms.push(sym);
+    });
+  });
+
+  // Draw edges
+  for (const [key, edge] of Object.entries(edgeMap)) {
+    const { from, to, syms } = edge;
+    const p1 = pos[from], p2 = pos[to];
+    const label = syms.join(', ');
+
+    if (from === to) {
+      // Self loop
+      const lx = p1.x, ly = p1.y - nodeR;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const cr = nodeR * 1.4;
+      path.setAttribute('d', `M${lx-cr*0.6},${ly} C${lx-cr},${ly-cr*1.5} ${lx+cr},${ly-cr*1.5} ${lx+cr*0.6},${ly}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#475569');
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('marker-end', `url(#arrow-${svgEl.id})`);
+      svgEl.appendChild(path);
+
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', lx);
+      txt.setAttribute('y', ly - cr * 1.2);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('fill', '#94a3b8');
+      txt.setAttribute('font-size', '11');
+      txt.setAttribute('font-family', 'JetBrains Mono, monospace');
+      txt.textContent = label;
+      svgEl.appendChild(txt);
+    } else {
+      // Check reverse edge
+      const revKey = `${to}→${from}`;
+      const hasCurve = edgeMap[revKey] !== undefined;
+
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const ux = dx / dist, uy = dy / dist;
+      const px = -uy, py = ux; // perpendicular
+
+      const curve = hasCurve ? 30 : 0;
+      const mx = (p1.x + p2.x) / 2 + px * curve;
+      const my = (p1.y + p2.y) / 2 + py * curve;
+
+      // Adjust endpoint to hit circle border
+      const startX = p1.x + ux * nodeR;
+      const startY = p1.y + uy * nodeR;
+      const endX = p2.x - ux * nodeR;
+      const endY = p2.y - uy * nodeR;
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M${startX},${startY} Q${mx},${my} ${endX},${endY}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#475569');
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('marker-end', `url(#arrow-${svgEl.id})`);
+      svgEl.appendChild(path);
+
+      // Label at midpoint
+      const lx = (startX + mx * 2 + endX) / 4;
+      const ly = (startY + my * 2 + endY) / 4;
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', lx);
+      txt.setAttribute('y', ly - 6);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('fill', '#94a3b8');
+      txt.setAttribute('font-size', '11');
+      txt.setAttribute('font-family', 'JetBrains Mono, monospace');
+      txt.textContent = label;
+      svgEl.appendChild(txt);
+    }
+  }
+
+  // Start arrow
+  if (pos[startState]) {
+    const p = pos[startState];
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    arrow.setAttribute('x1', p.x - nodeR * 2.2);
+    arrow.setAttribute('y1', p.y);
+    arrow.setAttribute('x2', p.x - nodeR);
+    arrow.setAttribute('y2', p.y);
+    arrow.setAttribute('stroke', '#10b981');
+    arrow.setAttribute('stroke-width', '2');
+    arrow.setAttribute('marker-end', `url(#arrow-start-${svgEl.id})`);
+    svgEl.appendChild(arrow);
+  }
+
+  // Draw nodes
+  states.forEach(st => {
+    const { x, y } = pos[st];
+    const isFinal = finalStates.has(st);
+    const isStart = st === startState;
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+    // Glow
+    if (isFinal) {
+      const glow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      glow.setAttribute('cx', x); glow.setAttribute('cy', y);
+      glow.setAttribute('r', nodeR + 5);
+      glow.setAttribute('fill', 'none');
+      glow.setAttribute('stroke', '#f59e0b');
+      glow.setAttribute('stroke-width', '2');
+      glow.setAttribute('opacity', '0.4');
+      g.appendChild(glow);
+    }
+
+    // Outer circle (final double ring)
+    if (isFinal) {
+      const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      outer.setAttribute('cx', x); outer.setAttribute('cy', y);
+      outer.setAttribute('r', nodeR + 5);
+      outer.setAttribute('fill', 'none');
+      outer.setAttribute('stroke', '#f59e0b');
+      outer.setAttribute('stroke-width', '1.5');
+      g.appendChild(outer);
+    }
+
+    // Main circle
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', x); circle.setAttribute('cy', y);
+    circle.setAttribute('r', nodeR);
+    circle.setAttribute('fill', isStart ? 'rgba(16,185,129,0.15)' : (isFinal ? 'rgba(245,158,11,0.12)' : 'rgba(30,45,69,0.9)'));
+    circle.setAttribute('stroke', isStart ? '#10b981' : (isFinal ? '#f59e0b' : '#00d4ff'));
+    circle.setAttribute('stroke-width', isStart ? '2.5' : '1.5');
+    g.appendChild(circle);
+
+    // Label
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', x); txt.setAttribute('y', y + 5);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('fill', '#e2e8f0');
+    txt.setAttribute('font-size', st.length > 3 ? '9' : '13');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('font-family', 'JetBrains Mono, monospace');
+    txt.textContent = st;
+    g.appendChild(txt);
+
+    svgEl.appendChild(g);
+  });
+
+  // Legend
+  const legG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  legG.setAttribute('transform', `translate(8, ${H - 60})`);
+  legG.innerHTML = `
+    <circle cx="10" cy="8" r="7" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="2"/>
+    <text x="22" y="13" fill="#94a3b8" font-size="10" font-family="JetBrains Mono, monospace">Start</text>
+    <circle cx="10" cy="28" r="7" fill="rgba(245,158,11,0.12)" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="10" cy="28" r="11" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.4"/>
+    <text x="26" y="33" fill="#94a3b8" font-size="10" font-family="JetBrains Mono, monospace">Final</text>
+  `;
+  svgEl.appendChild(legG);
+}
+
+// ─────────────────────────────────────────────
+//  MODAL
+// ─────────────────────────────────────────────
+function showPairInfo(key) {
+  const info = gTable[key];
+  if (!info) return;
+
+  const [a, b] = key.split(',');
+  const isMarked = info.marked;
+
+  const title = document.getElementById('modal-title');
+  const pairBadge = document.getElementById('modal-pair');
+  const reasonEl = document.getElementById('modal-reason');
+
+  title.textContent = isMarked ? '✗ Distinguishable Pair' : '✓ Indistinguishable Pair';
+  title.className = isMarked ? 'is-marked' : 'is-unmarked';
+  pairBadge.textContent = `{ ${a}, ${b} }`;
+
+  let html = '';
+  info.reason.forEach((r, i) => {
+    html += `<div class="reason-step">
+      <div class="reason-label">${r.label}</div>
+      <div>${r.text.replace(/\n/g, '<br>')}</div>
+    </div>`;
+  });
+
+  if (!isMarked) {
+    html += `<div class="reason-step" style="border-top:1px solid var(--border); padding-top:8px; margin-top:8px">
+      <div class="reason-label" style="color:var(--unmarked)">Result</div>
+      <div style="color:var(--unmarked)">These states can be <strong>merged</strong> in the minimized DFA.</div>
+    </div>`;
+  } else {
+    html += `<div class="reason-step" style="border-top:1px solid var(--border); padding-top:8px; margin-top:8px">
+      <div class="reason-label" style="color:var(--marked)">Result</div>
+      <div style="color:var(--marked)">These states are <strong>distinguishable</strong> — must remain separate.</div>
+    </div>`;
+  }
+
+  if (info.pass >= 0) {
+    html += `<div class="reason-step">
+      <div class="reason-label">Marked in Pass</div>
+      <div>Pass <strong>${info.pass}</strong> of the table-filling algorithm</div>
+    </div>`;
+  }
+
+  reasonEl.innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModalDirect();
+
+  if (document.getElementById('results').style.display === 'none') return;
+  const tag = (e.target?.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+
+  if (e.key === 'ArrowRight') {
+    goToNextStep();
+    e.preventDefault();
+  } else if (e.key === 'ArrowLeft') {
+    goToPrevStep();
+    e.preventDefault();
+  } else if (e.key === 'Home') {
+    goToFirstStep();
+    e.preventDefault();
+  } else if (e.key === 'End') {
+    goToLastStep();
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
